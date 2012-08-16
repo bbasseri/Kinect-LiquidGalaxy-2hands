@@ -1,0 +1,2 @@
+-configure google earth to read from SpacNavigator: http://code.google.com/p/liquid-galaxy/wiki/LinuxSpaceNavigator
+	+in the above changes to google earth's config, set SpaceNavigator/device = "path-that-fakenav-is-writing", ie: /tmp/fakenav
