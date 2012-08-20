@@ -146,8 +146,8 @@ int main(int argc, char **argv){
     if(argc < 3) {
      // fprintf(stderr, "Usage: %s <server> <port>\n", argv[0]);
      // return 1;
-        server = "localhost";
-        port = "23457";
+        server = (char*) "localhost";
+        port =(char*) "23457";
     }else{
         server = argv[1];
         port = argv[2];

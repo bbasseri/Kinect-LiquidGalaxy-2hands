@@ -22,13 +22,9 @@ int main(int argc, char *argv[]) {
 	xn::EnumerationErrors errors;
 	XnCallbackHandle cbhandle;
 
-	// if(argc < 3) {
-	// 	fprintf(stderr, "Usage: %s <server> <port>\n", argv[0]);
-	// 	return 1;
-	// }
-
 	//Connect to fakenav server.
 	init_control(argv[0], atoi(argv[1]));
+	conf();
 
 	//Create context from settings file.
 	rc = g_Context.InitFromXmlFile(CONFIG_PATH, g_ScriptNode, &errors);

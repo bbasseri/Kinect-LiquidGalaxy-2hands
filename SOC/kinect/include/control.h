@@ -33,3 +33,4 @@ void XN_CALLBACK_TYPE Hand_Destroy(xn::HandsGenerator &generator,
                                    void *cookie);
 float threshCalulate(XnFloat delta, float scale);
 
+int conf();

@@ -9,16 +9,25 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <netdb.h>
+#include <iostream>
+#include <iomanip>
+#include <cstdlib>
+#include <libconfig.h++>
+
 
 #include "control.h"
 
 
 #define round(x) ((x)>=0?(long)((x)+0.5):(long)((x)-0.5))
 
+using namespace std;
+using namespace libconfig;
+
 char buf[256];
 int _server = -1;
 int numHands = 0;
-bool autoRun = false;
+bool autoRun;
+string autoRunSource;
 
 //Are we tracking hands?
 XnBool trackingMove = false;
@@ -39,21 +48,29 @@ XnFloat x = 0.0f,
 	roll = 0.0f;
 
 //Configurable values:
-float thresh = 10.0f;
-float smooth = 5.0f;
+float thresh;
+float smooth;
 
+float scaleX;
+float scaleY;
+float scaleZ;
+float scaleYaw;
+float scalePitch;
+
+float zLimit;
 
 //HandsGenerator for tracking hands.
 extern xn::HandsGenerator g_HandsGenerator;
 
 
 void init_control(const char *serveraddr, int portno) {
-	_server = connect_to_server(serveraddr, portno);
 
+	_server = connect_to_server(serveraddr, portno);
 	if(_server == -1) {
 		fprintf(stderr, "Error connecting to fakenav\n");
 		exit(1);
 	}
+	// conf();
 }
 
 /* Update fakenave with latest controls.
@@ -63,7 +80,7 @@ void init_control(const char *serveraddr, int portno) {
  */
 void update_control() {
 
-	// Setting 0 to axis based on hands being tracked or lost (TODO)
+	// Setting 0 to axis based on hands being tracked or lost
 	if(trackingMove == false){
 		x = 0.0f;
 		y = 0.0f;
@@ -166,22 +183,6 @@ void XN_CALLBACK_TYPE Hand_Update(xn::HandsGenerator &generator,
                                   XnFloat time,
                                   void *cookie) {
 
-	// Add Scale for every axis. Which will be used to disable/enable
-	// Increase/Decrease speed. (Config file functionality)  (TODO)
-
-	// Add lower boud, to lose hand if deltaZ on either hand reaches a
-	// certain number stop tracking hand. (Config file functionality) (TODO)
-
-	// If hand is not tracked anymore, set 0 to all axis for that hand  (TODO)
-
-	float scaleX = 4.0f;
-	float scaleY = 1.0f;
-	float scaleZ = 2.0f;
-	float scaleYaw = 4.0f;
-	float scalePitch = 4.0f;
-
-	float zLimit = -330.0f;
-
     if(moveId == handId) {
 		XnFloat deltaX = startMove.X - position->X;
 		XnFloat deltaY = startMove.Y - position->Y;
@@ -246,15 +247,52 @@ void XN_CALLBACK_TYPE Hand_Destroy(xn::HandsGenerator &generator,
 	    trackingLook = false;
 	}
 	numHands--;
-	if (numHands <= 0){
-		if (autoRun == true){
+	if (numHands == 0){
+		if (autoRun == 1 && autoRunSource != ""){
 			// int pid_ps = fork();
-   //  		if (pid_ps == 0) {
-   //      		char *execArgs[] = {server, port, NULL };
-   //      		execv("./kinect", execArgs);
-   //  		}
+    		// if (pid_ps == 0) {
+				printf(".%s. \n",autoRunSource.c_str());
+        		if (system(autoRunSource.c_str()))
+        			printf("Script executed");
+    		// }
 		}
 	}
 
 }
 
+int conf()
+{
+		Config cfg;
+		// Read the file. If there is an error, report it and exit.
+		cfg.readFile("./config.ini");
+
+		scaleX = cfg.lookup("scaleX");
+		scaleY = cfg.lookup("scaleY");
+		scaleZ = cfg.lookup("scaleZ");
+
+		scaleYaw = cfg.lookup("scaleYaw");
+		scalePitch = cfg.lookup("scalePitch");
+
+		zLimit = cfg.lookup("zLimit");
+
+		thresh = cfg.lookup("thresh");
+		smooth = cfg.lookup("smooth");
+
+		autoRun = cfg.lookup("autoRun");
+
+		if(cfg.lookupValue("autoRunSource", autoRunSource))
+		{
+
+		}
+
+		cout << "X: " << scaleX << endl << endl;
+		cout << "Y: " << scaleY << endl << endl;
+		cout << "Z: " << scaleZ << endl << endl;
+		cout << "yaw: " << scaleYaw << endl << endl;
+		cout << "pitch: " << scalePitch << endl << endl;
+		cout << "zLimit: " << zLimit << endl << endl;
+		cout << "thresh: " << thresh << endl << endl;
+		cout << "smooth: " << smooth << endl << endl;
+		cout << "autoRun: " << autoRun << endl << endl;
+		cout << "autoRunSource: ." << autoRunSource << "." << endl << endl;
+}
