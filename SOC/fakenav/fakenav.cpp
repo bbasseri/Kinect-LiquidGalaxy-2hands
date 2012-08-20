@@ -1,15 +1,19 @@
 #include "fakenav.h"
 
-//TODO: 
+//TODO:
 // - Buttons
 // - Not all the axes work...
 
 //Axis order:
 //x, y, z, pitch, roll, yaw
 
+//Server and port inputs
+char* server;
+char* port;
+
 //axis values
 float x, y, z, yaw, pitch, roll = 0.0f;
-    
+
 //the named pipe
 unsigned int fd = 0;
 
@@ -24,7 +28,7 @@ void write_axis(int axid, float amount){
     ev.code = axid;
     ev.value = amount;
     ev.type = EV_REL;
-    
+
     gettimeofday(&ev.time, NULL);
 
     write(fd, &ev, sizeof(ev));
@@ -41,8 +45,8 @@ void update_dev_file(){
 
 //main fork()'ing socket server
 int run_server(){
-    int serversock, portno;    
-    
+    int serversock, portno;
+
     socklen_t clilen;
     serversock = socket(AF_INET, SOCK_STREAM, 0);
 
@@ -68,48 +72,56 @@ int run_server(){
     }
 
     listen(serversock, 5);
-                
+
     printf("waiting for clients\n");
-    
+
+
+    chdir("../kinect");
+    int pid_ps = fork();
+    if (pid_ps == 0) {
+        char *execArgs[] = {server, port, NULL };
+        execv("./kinect", execArgs);
+    }
+
     clilen = sizeof(cli_addr);
     while (true){
-        int newsockfd = accept(serversock, 
-                                (struct sockaddr *) &cli_addr, 
+        int newsockfd = accept(serversock,
+                                (struct sockaddr *) &cli_addr,
                                 &clilen);
         if (newsockfd < 0){
             printf("error on accept()\n");
             exit(1);
-            
+
         }
-                
+
         int pid = fork();
-                
+
         if (pid == 0){
-            //this is the client process            
+            //this is the client process
             close(serversock);
-            
+
             printf("Client connected\n");
-            
-            while(true){                                    
+
+            while(true){
                 if(read(newsockfd, buffer, 256) <= 0){
                     printf("client disconnected\n");
                     exit(0);
                 }
-                
+
                 printf("Got: %s\n", buffer);
-                                 
-                if(sscanf(buffer, "%f, %f, %f, %f, %f, %f\n", 
-                        &x, &y, &z, &yaw, &pitch, &roll) == 6){                
+
+                if(sscanf(buffer, "%f, %f, %f, %f, %f, %f\n",
+                        &x, &y, &z, &yaw, &pitch, &roll) == 6){
                     update_dev_file();
                 }else{
                     printf("Couldn't parse: '%s'\n", buffer);
                 }
-                
+
             }
-           
-            
+
+
         }else{
-        
+
             //in the server process
             close(newsockfd);
         }
@@ -118,27 +130,39 @@ int run_server(){
 
 //control-c handler
 void on_sigint(int sig) {
-       
+
     signal(SIGINT, SIG_DFL);
-    
+
     close(fd);
-    
+
     printf("goodbye...\n");
-    
+
     exit(0);
 }
 
 //entry point
 int main(int argc, char **argv){
 
+    if(argc < 3) {
+     // fprintf(stderr, "Usage: %s <server> <port>\n", argv[0]);
+     // return 1;
+        server = "localhost";
+        port = "23457";
+    }else{
+        server = argv[1];
+        port = argv[2];
+    }
+    printf("%s server\n", server);
+
     printf("fakenav!\n");
     printf("waiting for google earth to open %s...\n", DEV_NAME);
 
     fd = open(DEV_NAME, O_WRONLY);
-        
+
     printf("opened pipe!\n");
-    
+
     signal(SIGINT, on_sigint);
-        
+
     run_server();
+
 }

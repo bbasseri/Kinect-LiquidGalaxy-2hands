@@ -17,6 +17,8 @@
 
 char buf[256];
 int _server = -1;
+int numHands = 0;
+bool autoRun = false;
 
 //Are we tracking hands?
 XnBool trackingMove = false;
@@ -36,11 +38,14 @@ XnFloat x = 0.0f,
 	pitch = 0.0f,
 	roll = 0.0f;
 
+//Configurable values:
+float thresh = 10.0f;
+float smooth = 5.0f;
+
+
 //HandsGenerator for tracking hands.
 extern xn::HandsGenerator g_HandsGenerator;
 
-//
-int mode = 0;
 
 void init_control(const char *serveraddr, int portno) {
 	_server = connect_to_server(serveraddr, portno);
@@ -57,6 +62,17 @@ void init_control(const char *serveraddr, int portno) {
  * deltaZ should control the speed with which you move forward.
  */
 void update_control() {
+
+	// Setting 0 to axis based on hands being tracked or lost (TODO)
+	if(trackingMove == false){
+		x = 0.0f;
+		y = 0.0f;
+		z = 0.0f;
+	}
+	if(trackingLook == false){
+		yaw = 0.0f;
+		pitch = 0.0f;
+	}
 
 	//x, y, z, yaw, pitch, roll
 	sprintf(buf, "%f, %f, %f, %f, %f, %f\n",
@@ -131,16 +147,17 @@ void XN_CALLBACK_TYPE Hand_Create(xn::HandsGenerator &generator,
         printf("New Hand: %d @(%f, %f, %f)\n", handId, position->X, position->Y, position->Y
 );
 	if(!trackingMove) {
-	        trackingMove = true;
-	        startMove = *position;
+	    trackingMove = true;
+	    startMove = *position;
 		moveId = handId;
+		numHands++;
 	} else if(!trackingLook) {
 		trackingLook = true;
 		startLook = *position;
 		lookId = handId;
+		numHands++;
 	}
 }
-
 
 /* When the hand moves, update the controls sent to fakenav. */
 void XN_CALLBACK_TYPE Hand_Update(xn::HandsGenerator &generator,
@@ -148,80 +165,96 @@ void XN_CALLBACK_TYPE Hand_Update(xn::HandsGenerator &generator,
                                   const XnPoint3D *position,
                                   XnFloat time,
                                   void *cookie) {
-	float scale = 4.0f;
-	float smooth = 5.0f;
-	float thresh = 20.0f;
 
+	// Add Scale for every axis. Which will be used to disable/enable
+	// Increase/Decrease speed. (Config file functionality)  (TODO)
+
+	// Add lower boud, to lose hand if deltaZ on either hand reaches a
+	// certain number stop tracking hand. (Config file functionality) (TODO)
+
+	// If hand is not tracked anymore, set 0 to all axis for that hand  (TODO)
+
+	float scaleX = 4.0f;
+	float scaleY = 1.0f;
+	float scaleZ = 2.0f;
+	float scaleYaw = 4.0f;
+	float scalePitch = 4.0f;
+
+	float zLimit = -330.0f;
 
     if(moveId == handId) {
 		XnFloat deltaX = startMove.X - position->X;
 		XnFloat deltaY = startMove.Y - position->Y;
 		XnFloat deltaZ = startMove.Z - position->Z;
 
-		if(deltaX < thresh && deltaX > -thresh){
-			x = 0.0f;
-		} else if (deltaX < 0.0f) {
-			x = (round(deltaX) / smooth) * -scale;
-		} else{
-			x = (round(deltaX) / smooth) * -scale;
+		if(deltaZ - deltaY > zLimit){
+			x = threshCalulate(deltaX, -scaleX);
+			y = threshCalulate(deltaZ, -scaleZ);
+			z = threshCalulate(deltaY, scaleY);
+		}else{
+			x=0;
+			y=0;
+		    z=0;
+		    trackingMove = false;
+		    generator.xn::HandsGenerator::StopTracking(moveId);
 		}
 
-
-		if(deltaY < thresh && deltaY > -thresh){
-			y = 0.0f;
-		} else if (deltaY < 0.0f) {
-			y = (round(deltaZ) / smooth) * -scale;
-		} else{
-			y = (round(deltaZ) / smooth) * -scale;
-		}
-
-		if(deltaZ < thresh && deltaZ > -thresh){
-			z = 0.0f;
-		} else if (deltaZ < 0.0f) {
-			z = (round(deltaY) / smooth) * scale;
-		} else{
-			z = (round(deltaY) / smooth) * scale;
-		}
-
-		// x = (round(deltaX) / smooth) * -scale;
-		// y = (round(deltaZ) / smooth) * -scale;
-		// z = (round(deltaY) / smooth) * scale;
     } else if(lookId == handId) {
 		XnFloat deltaX = startLook.X - position->X;
 		XnFloat deltaY = startLook.Y - position->Y;
 		XnFloat deltaZ = startLook.Z - position->Z;
 
-		if(deltaX < thresh && deltaX > -thresh){
-			yaw = 0.0f;
-		} else if (deltaX < 0.0f) {
-			yaw = (round(deltaX) / smooth) * -scale;
-		} else{
-			yaw = (round(deltaX) / smooth) * -scale;
+		if(deltaZ - deltaY > zLimit){
+			yaw = threshCalulate(deltaX, -scaleYaw);
+			pitch = threshCalulate(deltaY, -scalePitch);
+		}else{
+			yaw=0;
+			pitch=0;
+		    trackingLook = false;
+		    generator.xn::HandsGenerator::StopTracking(lookId);
 		}
-
-		if(deltaY < thresh && deltaY > -thresh){
-			pitch = 0.0f;
-		} else if (deltaY < 0.0f) {
-			pitch = (round(deltaY) / smooth) * -scale;
-		} else{
-			pitch = (round(deltaY) / smooth) * -scale;
-		}
-
-		// yaw = (round(deltaX) / smooth) * -scale;
-		// pitch = (round(deltaY) / smooth) * -scale;
 	}
 }
+
+/* Calculates x y z, based on thresh, smooth, and scale */
+float threshCalulate(XnFloat delta, float scale){
+	if(delta < thresh && delta > -thresh){
+		return 0.0f;
+	} else if (delta < 0.0f) {
+		return (round(delta) / smooth) * scale;
+	} else{
+		return (round(delta) / smooth) * scale;
+	}
+}
+
 
 /* Hand is gone, should stop updating fakenav... */
 void XN_CALLBACK_TYPE Hand_Destroy(xn::HandsGenerator &generator,
                                    XnUserID handId,
                                    XnFloat time,
                                    void *cookie) {
-        printf("Lost hand: %d\n", handId);
+
+
+    printf("Lost hand: %d\n", handId);
+
+    // When both hands lost if specified in config file, run binary
+    // script that is provided (Config file functionality) (TODO)
+
 	if(moveId == handId) {
 		trackingMove = false;
 	} else if(lookId == handId) {
-	        trackingLook = false;
+	    trackingLook = false;
 	}
+	numHands--;
+	if (numHands <= 0){
+		if (autoRun == true){
+			// int pid_ps = fork();
+   //  		if (pid_ps == 0) {
+   //      		char *execArgs[] = {server, port, NULL };
+   //      		execv("./kinect", execArgs);
+   //  		}
+		}
+	}
+
 }
 
